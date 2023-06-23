@@ -1,0 +1,39 @@
+
+# /ip firewall mangle
+# This rules are for connection mark and future use on routing table
+add action=mark-connection chain=prerouting comment="WAN1 - Trafico desde WAN1" in-interface=ether1 new-connection-mark=WAN1 passthrough=yes
+add action=mark-connection chain=prerouting comment="WAN2 - Trafico desde WAN2" in-interface=ether2 new-connection-mark=WAN2 passthrough=yes
+add action=mark-routing chain=prerouting comment="Clientes que salen siempre por WAN2" connection-mark=!WAN1 dst-address=!192.168.0.0/16 new-routing-mark=Ruta-WAN2 passthrough=no src-address-list=Siempre_WAN2
+add action=mark-routing chain=prerouting comment="Clientes que salen siempre por WAN1" connection-mark=!WAN2 dst-address=!192.168.0.0/16 new-routing-mark=Ruta-WAN1 passthrough=no src-address-list=Siempre_WAN1
+add action=mark-routing chain=prerouting comment="WAN1 Marcar Ruta Forward Devolucion" connection-mark=WAN1 dst-address-list=!VPNs in-interface=bridge new-routing-mark=Ruta-WAN1 passthrough=yes
+add action=mark-routing chain=prerouting comment="WAN2 Marcar Ruta Forward Devolucion" connection-mark=WAN2 dst-address-list=!VPNs in-interface=bridge new-routing-mark=Ruta-WAN2 passthrough=yes
+add action=mark-routing chain=output comment="WAN1 Marcar Ruta trafico saliente" connection-mark=WAN1 dst-address-list=!VPNs new-routing-mark=Ruta-WAN1 passthrough=no
+add action=mark-routing chain=output comment="WAN2 Marcar Ruta trafico saliente" connection-mark=WAN2 dst-address-list=!VPNs new-routing-mark=Ruta-WAN2 passthrough=no
+
+# /ip firewall filter rules
+# This rules are usefull to make a secure Mikrotik router
+/ip firewall mangle
+add action=add-src-to-address-list address-list=Bloqueados address-list-timeout=5m chain=prerouting comment="Trampa para Encontrar Scanners TCP" dst-port=21-23,69,53,5060,3389,4899,5900,445 in-interface-list=WAN protocol=tcp \
+    src-address-list=!ips_conocidas
+add action=add-src-to-address-list address-list=Bloqueados address-list-timeout=5m chain=prerouting comment="Trampa para Encontrar Scanners UDP" dst-port=53 in-interface-list=WAN protocol=udp src-address-list=!ips_conocidas
+
+/ip firewall filter
+add action=accept chain=input comment="Accept established,related" connection-state=established,related
+add action=accept chain=forward comment="Accept established,related" connection-state=established,related
+add action=accept chain=input in-interface-list=WAN src-address-list=ips_conocidas
+add action=drop chain=input dst-port=53 in-interface-list=WAN protocol=udp
+add action=tarpit chain=input dst-port=53 in-interface-list=WAN protocol=tcp
+add action=drop chain=input in-interface-list=WAN src-address-list=Bloqueados
+add action=drop chain=forward in-interface-list=WAN src-address-list=Bloqueados
+add action=add-src-to-address-list address-list=temporario address-list-timeout=30s chain=input comment=\
+    "Port knock" dst-port=30000 protocol=tcp
+add action=add-src-to-address-list address-list=trafico_seguro address-list-timeout=4h chain=input comment=\
+    "Port knock" dst-port=40000 protocol=tcp src-address-list=temporario
+add action=tarpit chain=input comment="Bloquenado Scanners TCP con Tarpit" in-interface-list=WAN protocol=tcp \
+    src-address-list=Bloqueados
+add action=accept chain=input dst-port=1919 in-interface-list=WAN protocol=tcp
+add action=accept chain=input comment="Accept ICMP" in-interface-list=WAN protocol=icmp
+add action=drop chain=forward comment="Drop invalid" connection-state=invalid
+add action=drop chain=forward comment="Drop all from WAN not DSTNATed" connection-nat-state=!dstnat \
+    connection-state=new in-interface-list=WAN
+add action=drop chain=input comment="DROP ALL" in-interface-list=WAN

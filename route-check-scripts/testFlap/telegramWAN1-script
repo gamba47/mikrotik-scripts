@@ -1,0 +1,8 @@
+:local botId "YOUR_BOT_ID"
+:local chatId "YOUR_CHAT_ID"
+:local site [/system identity get value-name=name]
+
+:local message "MKT $site on WAN1 is changing prefered route more than 3 times in the last 10 minutes";
+
+# Send the message
+:tool fetch url="https://api.telegram.org/bot$botId/sendMessage?chat_id=$chatId&text=$message" keep-result=no

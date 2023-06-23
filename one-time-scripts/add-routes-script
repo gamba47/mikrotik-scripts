@@ -1,0 +1,46 @@
+###############################################################################
+# Do no touch - Local Variables Definition
+# This need to be tested again. Local vars are not working when run from command line.
+:local dnsWAN1;
+:local gwWan1;
+:local dnsWAN2;
+:local gwWan2;
+:local distance;
+
+#########################
+# Variables a Definir
+#########################
+# DNS a Utilizar para WAN1 y WAN2, la idea es tener 1 internacional y 2 DNS nacionales que tengan buen uptime. 
+# Deben ser Diferentes entre si para evitar que una falla de DNS afecte a ambos proveedores.
+:set $dnsWAN1 {"1.1.1.1";"200.16.208.187";"190.210.62.152"};
+:set $dnsWAN2 {"9.9.9.9";"190.193.87.143";"190.216.68.130"};
+
+# Estos se deberian poder tomar del DHCP si existen? Si es IP fija de donde lo saco?
+:set $gwWan1 "192.168.15.1";
+:set $gwWan2 "192.168.20.1";
+
+:set distance 0;
+:foreach dns in=$dnsWAN1 do={
+:set distance ($distance+1)
+:log info "El dns para WAN1 es $dns"
+# Test de Conectividad WAN1
+/ip route add check-gateway=ping comment="WAN1 - Test de Conectividad para DNS con IP $dns" distance=1 dst-address=$dns gateway=$gwWan1;
+/ip route add check-gateway=ping comment="WAN1 - Ruta Default Mark" distance=$distance gateway=$dns routing-mark=Ruta-WAN1 target-scope=30;
+/ip route add check-gateway=ping comment="WAN2 - Ruta Backup Mark" distance=($distance+3) gateway=$dns routing-mark=Ruta-WAN2 target-scope=30;
+/ip route add check-gateway=ping comment="WAN1 - Ruta Default Nro $distance Sin Mark" distance=$distance gateway=$dns target-scope=30;
+
+
+}
+
+:set distance 0;
+:foreach dns in=$dnsWAN2 do={
+:set distance ($distance+1)
+:log info "El dns para WAN2 es $dns"
+# Test de Conectividad WAN2
+/ip route add check-gateway=ping comment="WAN2 - Test de Conectividad para DNS con IP $dns" distance=1 dst-address=$dns gateway=$gwWan2;
+/ip route add check-gateway=ping comment="WAN2 - Ruta Default Mark" distance=$distance gateway=$dns routing-mark=Ruta-WAN2 target-scope=30;
+/ip route add check-gateway=ping comment="WAN1 - Ruta Backup Mark" distance=($distance+3) gateway=$dns routing-mark=Ruta-WAN1 target-scope=30;
+/ip route add check-gateway=ping comment="WAN2 - Ruta Default Nro $distance Sin Mark" distance=($distance+3) gateway=$dns target-scope=30;
+}
+
+:log info "Script finalizado correctamente"

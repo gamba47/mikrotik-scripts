@@ -1,0 +1,61 @@
+# This script is using another two scripts:
+# TelegramWAN1-script and TelegramWAN2-script
+# Those script are in charge to send Message to Telegram Users or groups.
+
+:global WAN1gw;
+:global newWAN1gw;
+:global WAN2gw;
+:global newWAN2gw;
+:global WAN1count;
+:global WAN2count;
+
+# Find the route in use for both services at this moment
+:set newWAN1gw [:ip route get [:ip route find where active and comment~"WAN1 - Ruta Default Mark"] gateway]
+:set newWAN2gw [:ip route get [:ip route find where active and comment~"WAN2 - Ruta Default Mark"] gateway]
+
+
+## problemas por resolver:
+# Se me cae el address list y parece que empiezo de nuevo
+# no toma WAN1gw y WAN2gw hasta que falla, no entendi porque.
+
+# Check WAN1 Status
+# If we have any route change will count for 10 minutes. If there are more than 3 changes in that lapse
+# will send a message over telegram
+:if ( $newWAN1gw != $WAN1gw ) do={
+:set $WAN1count ($WAN1count+1);
+:log info "Se detecto $WAN1count cambios de ruta para WAN1 $newWAN1gw diferente a $WAN1gw";
+:set $WAN1gw $newWAN1gw;
+:if ([:len [:ip firewall address-list find where list="WAN1flap"]] = 0) do={
+# Cargo un address list para detectar timeout
+:log info "No hay timeout definido para WAN1";
+:ip firewall address-list add list=WAN1flap address=$WAN1gw timeout=10m
+}
+:if ($WAN1count = 3) do={
+:log info "Mas de 3 cambios en los 10 ultimos minutos para la WAN1 enviar aviso";
+:system script run TelegramWAN1
+}} else={
+# En el caso de ser igual que antes verifico si existe el timeout para poner el contador en 0
+:if ([:len [:ip firewall address-list find where list="WAN1flap"]] = 0) do={
+:log info "Sin timeout puedo poner en 0 el contador para WAN1";
+:set $WAN1count 0;
+}}
+
+
+:if ( $newWAN2gw != $WAN2gw ) do={
+:log info "Se detecto $WAN2count cambios de ruta para WAN2  $newWAN2gw diferente a $WAN2gw";
+:set $WAN2gw $newWAN2gw;
+:set $WAN2count ($WAN2count+1);
+:if ([:len [:ip firewall address-list find where list="WAN2flap"]] = 0) do={
+# Cargo un address list para detectar timeout
+:log info "No hay timeout definido para WAN2";
+:ip firewall address-list add list=WAN2flap address=$WAN2gw timeout=10m
+}
+:if ($WAN2count = 3) do={
+:log info "Mas de 3 cambios en los ultimos 10 minutos para la WAN2 enviar aviso";
+:system script run TelegramWAN2
+}} else={
+# En el caso de ser igual que antes verifico si existe el timeout para poner el contador en 0
+:if ([:len [:ip firewall address-list find where list="WAN2flap"]] = 0) do={
+:log info "Sin timeout puedo poner en 0 el contador para WAN2";
+:set $WAN2count 0;
+}}
